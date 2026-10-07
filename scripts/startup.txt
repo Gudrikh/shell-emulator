@@ -1,0 +1,4 @@
+ls notes.txt
+unknown
+cd folder
+exit now
