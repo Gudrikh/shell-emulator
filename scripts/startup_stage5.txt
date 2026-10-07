@@ -1,0 +1,34 @@
+# Проверка mkdir и mv
+ls
+mkdir archive
+mkdir archive/container
+mkdir archive/deep
+mkdir archive/deep/sub
+mkdir archive/deep/sub/child
+mkdir archive
+mkdir missing/child
+mkdir
+mv only-source
+mv a b c
+mv missing.txt archive
+mv / archive
+mv docs/sample.txt moved.txt
+head moved.txt
+mv moved.txt archive
+mv archive/moved.txt archive/container
+mv archive/deep archive/container
+ls archive/container/deep/sub
+mv archive/container/deep archive/container/deep/sub
+mv archive/container/moved.txt archive/container/deep/sub/child
+cd archive/container/deep/sub
+mv /archive/container/deep /archive/container/renamed
+ls
+ls child
+cd
+head archive/container/renamed/sub/child/moved.txt
+mv archive/container/renamed/sub/child/moved.txt archive/container/renamed/sub/child/moved.txt
+mv archive/container/renamed/sub/child/moved.txt missing/file.txt
+mkdir /absolute
+ls /
+mkdir /
+exit now

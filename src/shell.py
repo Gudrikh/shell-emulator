@@ -5,6 +5,8 @@ import os
 import posixpath
 import shlex
 
+from src.vfs import VfsEntry
+
 
 DEFAULT_HEAD_LINES = 10
 
@@ -38,6 +40,10 @@ class Shell:
             return self._whoami(parameters), False
         if command == "head":
             return self._head(parameters), False
+        if command == "mkdir":
+            return self._mkdir(parameters), False
+        if command == "mv":
+            return self._mv(parameters), False
 
         if command == "exit":
             if parameters:
@@ -162,8 +168,121 @@ class Shell:
         except UnicodeDecodeError:
             return "Ошибка: файл не содержит текст в кодировке UTF-8."
 
-        lines = content.splitlines()
-        return "\n".join(lines[:line_count])
+        return "\n".join(content.splitlines()[:line_count])
+
+    def _mkdir(self, parameters):
+        """Создаёт каталог в памяти."""
+        if len(parameters) != 1:
+            return "Ошибка: используйте mkdir путь."
+        if self.vfs is None:
+            return "Ошибка: VFS не загружена."
+
+        path = self._resolve_path(parameters[0])
+        if path is None:
+            return "Ошибка: путь выходит за пределы VFS."
+        if not path or path in self.vfs.entries:
+            return f"Ошибка: объект «{parameters[0]}» уже существует."
+
+        parent = path.rpartition("/")[0]
+        if parent:
+            parent_entry = self.vfs.entries.get(parent)
+            if parent_entry is None or parent_entry.kind != "dir":
+                return f"Ошибка: родительский каталог «{parent}» не найден."
+
+        self.vfs.entries[path] = VfsEntry(path, "dir", b"")
+        return ""
+
+    def _mv(self, parameters):
+        """Перемещает или переименовывает объект в памяти."""
+        if len(parameters) != 2:
+            return "Ошибка: используйте mv источник назначение."
+        if self.vfs is None:
+            return "Ошибка: VFS не загружена."
+
+        source = self._resolve_path(parameters[0])
+        destination = self._resolve_path(parameters[1])
+        if source is None or destination is None:
+            return "Ошибка: путь выходит за пределы VFS."
+        if not source:
+            return "Ошибка: нельзя переместить корень VFS."
+
+        entry = self.vfs.entries.get(source)
+        if entry is None:
+            return f"Ошибка: источник «{parameters[0]}» не найден."
+
+        target = self._move_target(source, destination)
+        error = self._validate_move(source, target, entry)
+        if error:
+            return error
+
+        self._apply_move(source, target, entry)
+        return ""
+
+    def _move_target(self, source, destination):
+        """Определяет итоговый путь назначения."""
+        target_entry = self.vfs.entries.get(destination)
+        if not destination or (
+            target_entry is not None and target_entry.kind == "dir"
+        ):
+            return posixpath.join(
+                destination,
+                posixpath.basename(source),
+            )
+        return destination
+
+    def _validate_move(self, source, target, entry):
+        """Проверяет возможность перемещения объекта."""
+        if target == source:
+            return "Ошибка: источник и назначение совпадают."
+        if entry.kind == "dir" and target.startswith(source + "/"):
+            return "Ошибка: нельзя переместить каталог внутрь себя."
+        if target in self.vfs.entries:
+            return f"Ошибка: объект «{target}» уже существует."
+
+        parent = target.rpartition("/")[0]
+        if parent:
+            parent_entry = self.vfs.entries.get(parent)
+            if parent_entry is None or parent_entry.kind != "dir":
+                return f"Ошибка: каталог назначения «{parent}» не найден."
+        return None
+
+    def _apply_move(self, source, target, entry):
+        """Меняет пути объекта и его потомков в словаре VFS."""
+        prefix = source + "/"
+        moved_entries = {}
+        old_paths = []
+
+        for old_path, old_entry in self.vfs.entries.items():
+            is_source = old_path == source
+            is_child = (
+                entry.kind == "dir"
+                and old_path.startswith(prefix)
+            )
+            if not is_source and not is_child:
+                continue
+
+            new_path = target + old_path[len(source):]
+            moved_entries[new_path] = VfsEntry(
+                new_path,
+                old_entry.kind,
+                old_entry.content,
+            )
+            old_paths.append(old_path)
+
+        for old_path in old_paths:
+            del self.vfs.entries[old_path]
+        self.vfs.entries.update(moved_entries)
+        self._update_current_directory(source, target, entry)
+
+    def _update_current_directory(self, source, target, entry):
+        """Сохраняет текущий каталог при перемещении его родителя."""
+        if entry.kind != "dir":
+            return
+        if self.current_directory == source:
+            self.current_directory = target
+        elif self.current_directory.startswith(source + "/"):
+            suffix = self.current_directory[len(source):]
+            self.current_directory = target + suffix
 
     def _resolve_path(self, path):
         """Нормализует путь относительно текущего каталога VFS."""
