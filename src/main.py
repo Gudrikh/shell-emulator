@@ -7,17 +7,18 @@ import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 
 from src.shell import Shell
+from src.vfs import VirtualFileSystem, VfsError
 
 
 class EmulatorApp:
     """Обрабатывает ввод команд в окне."""
 
-    def __init__(self, root, vfs_path, prompt, startup_script):
+    def __init__(self, root, vfs_path, prompt, startup_script, vfs):
         """Создаёт окно и запускает стартовый скрипт."""
         self.root = root
         self.vfs_path = vfs_path
         self.prompt = prompt
-        self.shell = Shell()
+        self.shell = Shell(vfs)
 
         username = getpass.getuser()
         hostname = socket.gethostname()
@@ -115,7 +116,7 @@ def parse_arguments():
 
 
 def main():
-    """Запускает графическое приложение."""
+    """Загружает VFS и запускает графическое приложение."""
     args = parse_arguments()
 
     username = getpass.getuser()
@@ -127,8 +128,16 @@ def main():
     print(f"Приглашение: {prompt}")
     print(f"Стартовый скрипт: {args.script or 'не задан'}")
 
+    try:
+        vfs = VirtualFileSystem.from_csv(args.vfs)
+    except VfsError as error:
+        print(f"Ошибка загрузки VFS: {error}")
+        return
+
+    print(f"Загружено объектов VFS: {len(vfs.entries)}")
+
     root = tk.Tk()
-    EmulatorApp(root, args.vfs, prompt, args.script)
+    EmulatorApp(root, args.vfs, prompt, args.script, vfs)
     root.mainloop()
 
 

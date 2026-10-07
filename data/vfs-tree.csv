@@ -1,0 +1,5 @@
+path,type,content_base64
+level1,dir,
+level1/level2,dir,
+level1/level2/level3,dir,
+level1/level2/level3/deep.txt,file,RGVlcCBmaWxl
