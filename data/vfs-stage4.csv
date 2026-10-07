@@ -1,0 +1,4 @@
+path,type,content_base64
+docs,dir,
+docs/sample.txt,file,TGluZSAxCkxpbmUgMgpMaW5lIDMKTGluZSA0CkxpbmUgNQpMaW5lIDYKTGluZSA3CkxpbmUgOApMaW5lIDkKTGluZSAxMApMaW5lIDExCkxpbmUgMTI=
+docs/empty.txt,file,

@@ -1,0 +1,26 @@
+# Проверка команд этапа 4
+whoami
+whoami extra
+ls
+ls docs
+ls docs/sample.txt
+ls missing.txt
+ls docs extra
+cd docs
+ls
+head sample.txt
+head -n 2 sample.txt
+head -n 20 sample.txt
+head -n 0 sample.txt
+head empty.txt
+head -n nope sample.txt
+head -n -1 sample.txt
+head missing.txt
+head /docs
+cd
+ls
+cd docs/sample.txt
+cd missing
+cd ../../
+unknown
+exit now
