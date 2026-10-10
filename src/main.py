@@ -48,7 +48,9 @@ class EmulatorApp:
         self.input.bind("<Return>", self._handle_command)
         self.input.focus_set()
 
-        self._append("Доступные команды: ls, cd, exit.")
+        self._append(
+            "Доступные команды: ls, cd, whoami, head, mkdir, mv, exit."
+        )
         if startup_script:
             self._run_startup_script(startup_script)
 
@@ -99,7 +101,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--vfs",
-        default="data/vfs.csv",
+        default="data/vfs-stage4.csv",
         help="Путь к CSV-файлу виртуальной файловой системы.",
     )
     parser.add_argument(

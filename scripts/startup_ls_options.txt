@@ -1,0 +1,18 @@
+# Проверка ключей ls и продолжения после ошибок
+ls
+ls -a
+ls -l
+ls -R
+ls -al
+ls -a -l -R
+ls -alR docs
+ls -l docs/sample.txt
+ls -- .hidden.txt
+ls -z
+ls -az
+ls -l missing
+ls docs extra
+cd docs
+ls -R
+cd
+exit now
