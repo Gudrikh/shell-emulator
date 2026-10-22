@@ -64,8 +64,18 @@ class VirtualFileSystem:
         path = row["path"].strip()
         kind = row["type"].strip()
         encoded = row["content_base64"].strip()
-        parts = path.split("/")
+        VirtualFileSystem._validate_path(path, line_number)
+        if kind not in ("file", "dir"):
+            raise VfsError(
+                f"Строка {line_number}: тип должен быть file или dir."
+            )
+        content = VirtualFileSystem._decode_content(kind, encoded, line_number)
+        return VfsEntry(path, kind, content)
 
+    @staticmethod
+    def _validate_path(path, line_number):
+        """Проверяет относительный путь без пустых и служебных частей."""
+        parts = path.split("/")
         if (
             not path
             or path.startswith("/")
@@ -74,24 +84,21 @@ class VirtualFileSystem:
         ):
             raise VfsError(f"Строка {line_number}: неверный путь.")
 
-        if kind not in ("file", "dir"):
-            raise VfsError(f"Строка {line_number}: тип должен быть file или dir.")
-
+    @staticmethod
+    def _decode_content(kind, encoded, line_number):
+        """Проверяет содержимое каталога или декодирует файл."""
         if kind == "dir":
             if encoded:
                 raise VfsError(
                     f"Строка {line_number}: у папки не должно быть содержимого."
                 )
-            content = b""
-        else:
-            try:
-                content = base64.b64decode(encoded, validate=True)
-            except (binascii.Error, ValueError) as error:
-                raise VfsError(
-                    f"Строка {line_number}: неверный Base64."
-                ) from error
-
-        return VfsEntry(path, kind, content)
+            return b""
+        try:
+            return base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise VfsError(
+                f"Строка {line_number}: неверный Base64."
+            ) from error
 
     @staticmethod
     def _validate_parents(entries):
