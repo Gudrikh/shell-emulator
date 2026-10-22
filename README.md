@@ -36,15 +36,16 @@ python -m src.main --vfs "data/vfs-stage4.csv" --prompt "DEMO> "
 
 Каждая ссылка ведёт к состоянию проекта после соответствующего этапа.
 Ранее созданные коммиты сохраняют первоначальную реализацию.
-Доработки по замечаниям находятся в актуальной версии репозитория.
+Ссылки этапов 3–5 ведут к отдельным коммитам с исправлениями замечаний.
+Актуальная версия проекта находится в последнем коммите ветки master.
 
 | Этап | Содержание | Состояние проекта |
 | --- | --- | --- |
 | 1 | REPL и GUI | [Этап 1](https://github.com/Gudrikh/shell-emulator/tree/ea347fc1bcd9794ed5d37e9e3a751da2e5a2f3cc) |
 | 2 | Конфигурация | [Этап 2](https://github.com/Gudrikh/shell-emulator/tree/a7860059c1925e9c4da79e1561a5ad4d27bd0335) |
-| 3 | VFS из CSV | [Этап 3](https://github.com/Gudrikh/shell-emulator/tree/c4fdbf614ee7621bfb0f01d9f74d77ec2ba047be) |
-| 4 | Основные команды | [Этап 4](https://github.com/Gudrikh/shell-emulator/tree/86a150b31c9cac4a52212d0ae29100a5be826aa0) |
-| 5 | Изменение VFS | [Этап 5](https://github.com/Gudrikh/shell-emulator/tree/a832e18a1afddc7d30f438dcf570679bbff1b450) |
+| 3 | VFS из CSV | [Этап 3](https://github.com/Gudrikh/shell-emulator/tree/dd14577a63b27b2e68aecaf21340a8ea50ec65aa) |
+| 4 | Основные команды | [Этап 4](https://github.com/Gudrikh/shell-emulator/tree/219780202715ac3515507b8c34ddb260f62c168c) |
+| 5 | Изменение VFS | [Этап 5](https://github.com/Gudrikh/shell-emulator/tree/86c14bf4afff5c2ac7c1d2e2e065b84716603cba) |
 
 ## Этап 1. REPL
 
