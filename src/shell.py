@@ -9,6 +9,15 @@ from src.vfs import VfsEntry
 
 
 DEFAULT_HEAD_LINES = 10
+SINGLE_PATH_ARGUMENTS = 1
+MOVE_ARGUMENTS = 2
+HEAD_COUNT_ARGUMENTS = 3
+MIN_HEAD_LINES = 0
+LS_FLAGS = frozenset("alR")
+
+
+class CommandError(ValueError):
+    """Ошибка аргументов или выполнения команды."""
 
 
 class Shell:
@@ -32,25 +41,31 @@ class Shell:
         command = arguments[0]
         parameters = arguments[1:]
 
-        if command == "ls":
-            return self._ls(parameters), False
-        if command == "cd":
-            return self._cd(parameters), False
-        if command == "whoami":
-            return self._whoami(parameters), False
-        if command == "head":
-            return self._head(parameters), False
-        if command == "mkdir":
-            return self._mkdir(parameters), False
-        if command == "mv":
-            return self._mv(parameters), False
-
         if command == "exit":
-            if parameters:
-                return "Ошибка: exit не принимает аргументы.", False
-            return "Работа эмулятора завершена.", True
+            return self._exit(parameters)
 
-        return f"Ошибка: неизвестная команда «{command}».", False
+        handlers = {
+            "ls": self._ls,
+            "cd": self._cd,
+            "whoami": self._whoami,
+            "head": self._head,
+            "mkdir": self._mkdir,
+            "mv": self._mv,
+        }
+        handler = handlers.get(command)
+        if handler is None:
+            return f"Ошибка: неизвестная команда «{command}».", False
+        try:
+            return handler(parameters), False
+        except CommandError as error:
+            return str(error), False
+
+    @staticmethod
+    def _exit(parameters):
+        """Завершает работу при отсутствии аргументов."""
+        if parameters:
+            return "Ошибка: exit не принимает аргументы.", False
+        return "Работа эмулятора завершена.", True
 
     def _parse(self, line):
         """Раскрывает переменные среды и делит строку на части."""
@@ -61,50 +76,98 @@ class Shell:
         return list(lexer)
 
     def _ls(self, parameters):
-        """Выводит файл или содержимое каталога."""
-        if len(parameters) > 1:
-            return "Ошибка: используйте ls [путь]."
+        """Выводит объекты VFS с ключами -a, -l и -R."""
+        flags, requested = self._ls_options(parameters)
         if self.vfs is None:
             return "Ошибка: VFS не загружена."
-
-        path = self.current_directory
-        if parameters:
-            path = self._resolve_path(parameters[0])
-            if path is None:
-                return "Ошибка: путь выходит за пределы VFS."
-
-        if not path:
-            return self._list_directory("")
+        path = self._resolve_path(requested)
+        if path is None:
+            return "Ошибка: путь выходит за пределы VFS."
         entry = self.vfs.entries.get(path)
-        if entry is None:
-            return f"Ошибка: путь «{parameters[0]}» не найден."
-        if entry.kind == "file":
-            return posixpath.basename(path)
-        return self._list_directory(path)
+        if path and entry is None:
+            return f"Ошибка: путь «{requested}» не найден."
+        if entry is not None and entry.kind == "file":
+            return self._format_ls_entry(entry, flags)
+        if "R" in flags:
+            return self._list_recursive(path, flags)
+        return self._list_directory(path, flags)
 
-    def _list_directory(self, directory):
-        """Возвращает имена непосредственных дочерних объектов."""
-        prefix = f"{directory}/" if directory else ""
-        children = {}
+    @staticmethod
+    def _ls_options(parameters):
+        """Разбирает отдельные и объединённые ключи ls."""
+        flags = set()
+        paths = []
+        parse_flags = True
+        for argument in parameters:
+            if parse_flags and argument == "--":
+                parse_flags = False
+            elif Shell._is_ls_flag(argument, parse_flags):
+                selected = set(argument[1:])
+                if not selected <= LS_FLAGS:
+                    raise CommandError(
+                        f"Ошибка: неизвестный ключ ls «{argument}»."
+                    )
+                flags.update(selected)
+            else:
+                paths.append(argument)
+        if len(paths) > SINGLE_PATH_ARGUMENTS:
+            raise CommandError("Ошибка: используйте ls [-a] [-l] [-R] [путь].")
+        return flags, paths[0] if paths else "."
 
+    @staticmethod
+    def _is_ls_flag(argument, parse_flags):
+        """Отличает ключ от имени после -- и имени одиночного дефиса."""
+        return parse_flags and argument.startswith("-") and argument != "-"
+
+    def _directory_entries(self, directory, flags):
+        """Выбирает непосредственных детей, учитывая скрытые имена."""
+        entries = []
         for path, entry in self.vfs.entries.items():
-            if not path.startswith(prefix):
+            if posixpath.dirname(path) != directory:
                 continue
-            name = path[len(prefix):]
-            if name and "/" not in name:
-                children[name] = entry.kind
+            name = posixpath.basename(path)
+            if name.startswith(".") and "a" not in flags:
+                continue
+            entries.append(entry)
+        return sorted(entries, key=lambda entry: entry.path.lower())
 
+    @staticmethod
+    def _format_ls_entry(entry, flags):
+        """Показывает имя или тип, размер и имя объекта."""
+        name = posixpath.basename(entry.path)
+        if "l" in flags:
+            size = len(entry.content)
+            return f"{entry.kind} {size} {name}"
+        return name + ("/" if entry.kind == "dir" else "")
+
+    def _list_directory(self, directory, flags):
+        """Возвращает содержимое одного каталога."""
         return "\n".join(
-            name + ("/" if kind == "dir" else "")
-            for name, kind in sorted(
-                children.items(),
-                key=lambda item: item[0].lower(),
-            )
+            self._format_ls_entry(entry, flags)
+            for entry in self._directory_entries(directory, flags)
         )
+
+    def _list_recursive(self, directory, flags):
+        """Обходит дерево каталогов без рекурсии в стеке Python."""
+        blocks = []
+        pending = [directory]
+        while pending:
+            current = pending.pop()
+            entries = self._directory_entries(current, flags)
+            content = "\n".join(
+                self._format_ls_entry(entry, flags) for entry in entries
+            )
+            label = "/" + current if current else "/"
+            blocks.append(f"{label}:\n{content}".rstrip())
+            directories = [
+                entry.path for entry in entries if entry.kind == "dir"
+            ]
+            pending.extend(reversed(directories))
+        return "\n\n".join(blocks)
 
     def _cd(self, parameters):
         """Меняет текущий каталог VFS."""
-        if len(parameters) > 1:
+        if len(parameters) > SINGLE_PATH_ARGUMENTS:
             return "Ошибка: используйте cd [путь]."
         if self.vfs is None:
             return "Ошибка: VFS не загружена."
@@ -137,22 +200,7 @@ class Shell:
         if self.vfs is None:
             return "Ошибка: VFS не загружена."
 
-        line_count = DEFAULT_HEAD_LINES
-        if parameters and parameters[0] == "-n":
-            if len(parameters) != 3:
-                return "Ошибка: используйте head -n число файл."
-            try:
-                line_count = int(parameters[1])
-            except ValueError:
-                return "Ошибка: число строк должно быть целым числом."
-            if line_count < 0:
-                return "Ошибка: число строк не может быть отрицательным."
-            file_path = parameters[2]
-        elif len(parameters) == 1:
-            file_path = parameters[0]
-        else:
-            return "Ошибка: используйте head [-n число] файл."
-
+        file_path, line_count = self._head_options(parameters)
         path = self._resolve_path(file_path)
         if path is None:
             return "Ошибка: путь выходит за пределы VFS."
@@ -170,9 +218,36 @@ class Shell:
 
         return "\n".join(content.splitlines()[:line_count])
 
+    @staticmethod
+    def _head_options(parameters):
+        """Проверяет форму команды head и количество строк."""
+        if parameters and parameters[0] == "-n":
+            if len(parameters) != HEAD_COUNT_ARGUMENTS:
+                raise CommandError("Ошибка: используйте head -n число файл.")
+            count = Shell._head_line_count(parameters[1])
+            return parameters[2], count
+        if len(parameters) != SINGLE_PATH_ARGUMENTS:
+            raise CommandError("Ошибка: используйте head [-n число] файл.")
+        return parameters[0], DEFAULT_HEAD_LINES
+
+    @staticmethod
+    def _head_line_count(value):
+        """Преобразует и проверяет неотрицательное количество строк."""
+        try:
+            count = int(value)
+        except ValueError as error:
+            raise CommandError(
+                "Ошибка: число строк должно быть целым числом."
+            ) from error
+        if count < MIN_HEAD_LINES:
+            raise CommandError(
+                "Ошибка: число строк не может быть отрицательным."
+            )
+        return count
+
     def _mkdir(self, parameters):
         """Создаёт каталог в памяти."""
-        if len(parameters) != 1:
+        if len(parameters) != SINGLE_PATH_ARGUMENTS:
             return "Ошибка: используйте mkdir путь."
         if self.vfs is None:
             return "Ошибка: VFS не загружена."
@@ -194,7 +269,7 @@ class Shell:
 
     def _mv(self, parameters):
         """Перемещает или переименовывает объект в памяти."""
-        if len(parameters) != 2:
+        if len(parameters) != MOVE_ARGUMENTS:
             return "Ошибка: используйте mv источник назначение."
         if self.vfs is None:
             return "Ошибка: VFS не загружена."
